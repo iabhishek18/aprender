@@ -9,6 +9,7 @@ fn cand(n: u64, files: &[&str]) -> Candidate {
         approved: true,
         labels: vec![OPT_IN_LABEL.to_string()],
         files: files.iter().map(|s| (*s).to_string()).collect(),
+        head: format!("sha{n}"),
     }
 }
 
@@ -113,4 +114,12 @@ fn close_only_green_with_sha_on_main() {
     ));
     assert!(matches!(outcome(true, None), Outcome::KeepOpen { .. }));
     assert!(matches!(outcome(true, Some("")), Outcome::KeepOpen { .. }));
+}
+
+#[test]
+fn select_records_the_head_each_pick_was_judged_at() {
+    let cands = vec![cand(4, &["a.rs"]), cand(2, &["b.rs"])];
+    let sel = select(&cands);
+    assert_eq!(sel.picked, [2, 4]);
+    assert_eq!(sel.heads, ["sha2", "sha4"]);
 }

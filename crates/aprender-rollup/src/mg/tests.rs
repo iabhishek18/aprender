@@ -172,3 +172,15 @@ fn ancestor_args_check_against_origin_main() {
         ["merge-base", "--is-ancestor", "abc", "origin/main"]
     );
 }
+
+#[test]
+fn a_run_with_only_skipped_jobs_is_not_green() {
+    let j = format!("[{}]", run("completed", Some("skipped")));
+    assert_eq!(parse_verdict(&j, "H"), Ok(Verdict::Pending));
+    let j = format!(
+        "[{},{}]",
+        run("completed", Some("skipped")),
+        run("completed", Some("success"))
+    );
+    assert_eq!(parse_verdict(&j, "H"), Ok(Verdict::Green));
+}

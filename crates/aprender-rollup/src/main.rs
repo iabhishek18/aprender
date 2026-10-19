@@ -28,6 +28,19 @@ fn candidates() -> Result<Vec<aprender_rollup::Candidate>, String> {
     gh_json::parse_prs(&String::from_utf8_lossy(&o.stdout))
 }
 
+/// Trimmed stdout of a successful `git` run in `dir`.
+fn git_out(dir: &str, args: &[String]) -> Option<String> {
+    let o = Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(args)
+        .output()
+        .ok()?;
+    o.status
+        .success()
+        .then(|| String::from_utf8_lossy(&o.stdout).trim().to_string())
+}
+
 fn git(dir: &str, args: &[String]) -> bool {
     Command::new("git")
         .arg("-C")
@@ -38,12 +51,15 @@ fn git(dir: &str, args: &[String]) -> bool {
 }
 
 /// Merge each picked PR; a conflicting PR is aborted and ejected (stays open).
-fn assemble(dir: &str, picked: &[u64]) -> Vec<u64> {
+fn assemble(dir: &str, picked: &[u64], heads: &[String]) -> Vec<u64> {
     let mut merged = Vec::new();
-    for n in picked {
+    for (n, want) in picked.iter().zip(heads) {
         let one = build::steps("main", &[*n]);
         // steps 2..4 are this PR's fetch + merge; branch setup already ran for the full set
-        if git(dir, &one[2]) && git(dir, &one[3]) {
+        if !git(dir, &one[2]) || git_out(dir, &build::head_step()).as_deref() != Some(want.as_str())
+        {
+            eprintln!("eject #{n}: head moved since it was judged green and approved");
+        } else if git(dir, &one[3]) {
             merged.push(*n);
         } else {
             let _ = git(dir, &build::abort_step());
@@ -64,7 +80,7 @@ fn run(cmd: &str, dir: Option<&str>) -> Result<(), String> {
     if !git(dir, &setup[0]) || !git(dir, &setup[1]) {
         return Err("cannot create rollup branch".to_string());
     }
-    let merged = assemble(dir, &sel.picked);
+    let merged = assemble(dir, &sel.picked, &sel.heads);
     println!(
         "{}\n{}",
         build::branch_name(&sel.picked),

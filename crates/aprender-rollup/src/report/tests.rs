@@ -8,6 +8,7 @@ fn empty_plan_is_one_line() {
 #[test]
 fn lists_picked_then_each_skip_with_its_reason() {
     let sel = Selection {
+        heads: vec![],
         picked: vec![1, 3],
         rejected: vec![
             (
@@ -39,6 +40,7 @@ fn lists_picked_then_each_skip_with_its_reason() {
 #[test]
 fn over_cap_is_named_in_the_plan() {
     let sel = Selection {
+        heads: vec![],
         picked: vec![1],
         rejected: vec![(9, Reject::OverCap)],
     };

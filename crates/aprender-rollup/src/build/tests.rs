@@ -25,3 +25,8 @@ fn steps_branch_from_base_then_fetch_and_merge_each() {
 fn abort_is_merge_abort() {
     assert_eq!(abort_step(), ["merge", "--abort"]);
 }
+
+#[test]
+fn head_check_step_reads_fetch_head() {
+    assert_eq!(head_step(), ["rev-parse", "FETCH_HEAD"]);
+}

@@ -27,6 +27,8 @@ pub struct Candidate {
     pub approved: bool,
     pub labels: Vec<String>,
     pub files: Vec<String>,
+    /// Head commit the checks and approval were read at.
+    pub head: String,
 }
 
 /// Why a PR stays out of a rollup; posted as the ejection reason.
@@ -77,6 +79,8 @@ pub fn check(c: &Candidate) -> Option<Reject> {
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Selection {
     pub picked: Vec<u64>,
+    /// Head SHA of each pick (parallel to `picked`), re-checked when the rollup is built.
+    pub heads: Vec<String>,
     pub rejected: Vec<(u64, Reject)>,
 }
 
@@ -103,6 +107,7 @@ pub fn select(cands: &[Candidate]) -> Selection {
                 .push((c.number, Reject::FileOverlap { with, file }));
         } else if taken.len() < MAX_ENTRIES {
             sel.picked.push(c.number);
+            sel.heads.push(c.head.clone());
             taken.push((c, c.number));
         } else {
             sel.rejected.push((c.number, Reject::OverCap));

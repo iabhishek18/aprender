@@ -1,7 +1,7 @@
 use super::*;
 
 const OK: &str = r#"[{"number":7,"additions":20,"deletions":3,
- "labels":[{"name":"rollup-ok"},{"name":"x"}],
+ "headRefOid":"abc123","labels":[{"name":"rollup-ok"},{"name":"x"}],
  "files":[{"path":"a.rs"},{"path":"b.rs"}],
  "reviewDecision":"APPROVED",
  "statusCheckRollup":[{"conclusion":"SUCCESS"},{"conclusion":"SKIPPED"},{"state":"SUCCESS"}]}]"#;
@@ -13,6 +13,7 @@ fn parses_a_green_approved_pr() {
     assert!(c.green && c.approved);
     assert_eq!(c.labels, ["rollup-ok", "x"]);
     assert_eq!(c.files, ["a.rs", "b.rs"]);
+    assert_eq!(c.head, "abc123");
 }
 
 #[test]
@@ -54,4 +55,11 @@ fn malformed_input_is_an_error_not_an_empty_list() {
     assert!(parse_prs("{}").is_err());
     assert!(parse_prs(r#"[{"additions":1}]"#).is_err());
     assert_eq!(parse_prs("[]"), Ok(vec![]));
+}
+
+#[test]
+fn only_skipped_checks_are_not_green() {
+    let j = r#"[{"number":1,"additions":1,"deletions":1,"labels":[],"files":[],"headRefOid":"h",
+     "reviewDecision":"APPROVED","statusCheckRollup":[{"conclusion":"SKIPPED"},{"conclusion":"NEUTRAL"}]}]"#;
+    assert!(!parse_prs(j).expect("parse")[0].green);
 }

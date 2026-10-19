@@ -28,15 +28,17 @@ pub fn parse_verdict(json: &str, head: &str) -> Result<Verdict, String> {
         .iter()
         .filter(|r| r["headSha"].as_str() == Some(head))
         .collect();
-    let mut all_ok = !runs.is_empty();
+    // Green needs every run finished and at least one real success: all-skipped is not a pass.
+    let (mut unfinished, mut succeeded) = (false, false);
     for r in &runs {
         match (r["status"].as_str(), r["conclusion"].as_str()) {
-            (Some("completed"), Some("success" | "neutral" | "skipped")) => {}
+            (Some("completed"), Some("success")) => succeeded = true,
+            (Some("completed"), Some("neutral" | "skipped")) => {}
             (Some("completed"), Some(_)) => return Ok(Verdict::Red),
-            _ => all_ok = false,
+            _ => unfinished = true,
         }
     }
-    Ok(if all_ok {
+    Ok(if succeeded && !unfinished {
         Verdict::Green
     } else {
         Verdict::Pending

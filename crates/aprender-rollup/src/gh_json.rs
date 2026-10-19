@@ -6,7 +6,7 @@ use serde_json::Value;
 
 /// The `--json` field list the parser expects.
 pub const GH_FIELDS: &str =
-    "number,additions,deletions,labels,files,reviewDecision,statusCheckRollup";
+    "number,additions,deletions,labels,files,reviewDecision,statusCheckRollup,headRefOid";
 
 fn check_ok(c: &Value) -> bool {
     // CheckRun: status COMPLETED + conclusion; StatusContext: state.
@@ -15,6 +15,11 @@ fn check_ok(c: &Value) -> bool {
         (None, Some(s)) => s == "SUCCESS",
         _ => false,
     }
+}
+
+/// A real pass: all-skipped/neutral does not count as green.
+fn is_success(c: &Value) -> bool {
+    c["conclusion"].as_str() == Some("SUCCESS") || c["state"].as_str() == Some("SUCCESS")
 }
 
 fn parse_one(v: &Value) -> Result<Candidate, String> {
@@ -34,10 +39,11 @@ fn parse_one(v: &Value) -> Result<Candidate, String> {
         number,
         additions: n("additions"),
         deletions: n("deletions"),
-        green: checks.is_some_and(|c| !c.is_empty() && c.iter().all(check_ok)),
+        green: checks.is_some_and(|c| c.iter().all(check_ok) && c.iter().any(is_success)),
         approved: v["reviewDecision"].as_str() == Some("APPROVED"),
         labels: strs("labels", "name"),
         files: strs("files", "path"),
+        head: v["headRefOid"].as_str().unwrap_or_default().to_string(),
     })
 }
 

@@ -40,6 +40,12 @@ pub fn steps(base: &str, picked: &[u64]) -> Vec<Vec<String>> {
     out
 }
 
+/// Print the commit the last `fetch` brought in, to compare with the head judged at selection.
+#[must_use]
+pub fn head_step() -> Vec<String> {
+    vec!["rev-parse".to_string(), "FETCH_HEAD".to_string()]
+}
+
 /// Recovery step after a merge conflict: the PR is ejected and stays open.
 #[must_use]
 pub fn abort_step() -> Vec<String> {
