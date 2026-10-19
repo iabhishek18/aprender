@@ -13,11 +13,31 @@ pub fn first_failing_line(path: &Path) -> String {
     };
     let text = String::from_utf8_lossy(&bytes);
     let lines: Vec<&str> = text.lines().collect();
+    if let Some(k) = killed_rustc(&lines) {
+        return k;
+    }
     let first = lines
         .iter()
         .find(|l| l.starts_with("::error"))
         .or_else(|| lines.iter().find(|l| is_panic_or_error(l)));
     first.map_or_else(String::new, |l| (*l).to_owned())
+}
+
+/// sccache exits 2 when its rustc is killed by a signal (OOM or host kill), so cargo prints
+/// `could not compile` and `(exit status: 2)` with no rustc diagnostic (#5750). Name that,
+/// not a compile error: the first `could not compile` line before an sccache `exit status: 2`.
+fn killed_rustc(lines: &[&str]) -> Option<String> {
+    let at = lines
+        .iter()
+        .position(|l| l.contains("sccache") && l.contains("(exit status: 2)"))?;
+    let krate = lines[..at]
+        .iter()
+        .rev()
+        .find(|l| l.contains("could not compile"))
+        .map_or("", |l| l.trim_start_matches("error: ").trim());
+    Some(format!(
+        "rustc killed by signal (sccache exit status 2, not a compile error): {krate}"
+    ))
 }
 
 fn is_panic_or_error(line: &str) -> bool {
@@ -112,6 +132,30 @@ mod tests {
         let d = std::env::temp_dir().join(format!("sff-{tag}-{}", std::process::id()));
         std::fs::create_dir_all(&d).expect("mkdir");
         d
+    }
+
+    #[test]
+    fn sccache_exit_2_is_named_a_killed_rustc_not_a_compile_error() {
+        let d = tmp("k");
+        let p = log(
+            &d,
+            "s.log",
+            "warning: x\nerror: could not compile `aprender-core` (lib test); 3 warnings emitted\n\nCaused by:\n  process didn't exit successfully: `/usr/local/cargo/bin/sccache rustc --crate-name aprender` (exit status: 2)\n",
+        );
+        let got = first_failing_line(&p);
+        assert!(got.starts_with("rustc killed by signal"), "{got}");
+        assert!(got.contains("aprender-core"), "{got}");
+    }
+
+    #[test]
+    fn plain_rustc_exit_1_stays_a_compile_error() {
+        let d = tmp("k1");
+        let p = log(
+            &d,
+            "s.log",
+            "error: could not compile `a` (lib)\n\nCaused by:\n  process didn't exit successfully: `sccache rustc --crate-name a` (exit status: 1)\n",
+        );
+        assert_eq!(first_failing_line(&p), "error: could not compile `a` (lib)");
     }
 
     #[test]

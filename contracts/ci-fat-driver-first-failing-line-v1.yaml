@@ -67,5 +67,17 @@ falsification_tests:
     mutation: >-
       starts_with("::error") -> "::errorX" fails 3 tests; dropping the continue_on_error skip fails 1; each restored GREEN (2026-10-19).
 
+  - id: CFF-F-002
+    rule: a rustc killed by a signal under sccache is named, not shown as a compile error (GH #5750)
+    prediction: >-
+      A log with `could not compile` then an sccache `(exit status: 2)` yields
+      `rustc killed by signal ...` naming the crate; an `(exit status: 1)` compile
+      error keeps its own `error:` line.
+    test: 'cargo test -p aprender-ci-tools --lib section_first_fail'
+    if_fails: >-
+      an OOM-killed shard reads as a compile error and nobody looks at the runner
+    mutation: >-
+      "(exit status: 2)" -> "(exit status: 3)" fails 1 test; restored GREEN (2026-10-19).
+
 non_goals:
   - "Changing which sections block, or the per-section log dump."
