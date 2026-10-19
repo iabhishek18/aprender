@@ -15,16 +15,21 @@ pub enum Verdict {
     Pending,
 }
 
-/// Fold `gh run list --json status,conclusion` into one verdict. Any failed run is red;
+/// Fold `gh run list --json status,conclusion,headSha` (only runs of `head` count) into one verdict. Any failed run is red;
 /// no runs, or any unfinished run with none failed, is pending (never green).
 ///
 /// # Errors
 /// Returns the parse error text (a failed read is not_measured, L23).
-pub fn parse_verdict(json: &str) -> Result<Verdict, String> {
+pub fn parse_verdict(json: &str, head: &str) -> Result<Verdict, String> {
     let v: Value = serde_json::from_str(json).map_err(|e| e.to_string())?;
-    let runs = v.as_array().ok_or("expected a JSON array")?;
+    let runs: Vec<&Value> = v
+        .as_array()
+        .ok_or("expected a JSON array")?
+        .iter()
+        .filter(|r| r["headSha"].as_str() == Some(head))
+        .collect();
     let mut all_ok = !runs.is_empty();
-    for r in runs {
+    for r in &runs {
         match (r["status"].as_str(), r["conclusion"].as_str()) {
             (Some("completed"), Some("success" | "neutral" | "skipped")) => {}
             (Some("completed"), Some(_)) => return Ok(Verdict::Red),
@@ -49,11 +54,20 @@ pub fn run_list_args(branch: &str) -> Vec<String> {
         "--branch",
         branch,
         "--json",
-        "status,conclusion",
+        "status,conclusion,headSha",
     ]
     .iter()
     .map(|s| (*s).to_string())
     .collect()
+}
+
+/// `git` args: is `sha` an ancestor of `origin/main` (i.e. on main)?
+#[must_use]
+pub fn ancestor_args(sha: &str) -> Vec<String> {
+    ["merge-base", "--is-ancestor", sha, "origin/main"]
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect()
 }
 
 /// Result of bisecting a rollup: who may land, who broke it, who is still unknown.

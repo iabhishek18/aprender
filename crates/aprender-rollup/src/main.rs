@@ -87,11 +87,11 @@ fn gh(args: &[String]) -> Result<String, String> {
     Ok(String::from_utf8_lossy(&o.stdout).into_owned())
 }
 
-/// `verify <branch> <sha|-> <n,n,..> [--apply]`: read the merge-group verdict for the
+/// `verify <branch> <head-sha> <sha|-> <n,n,..> [--apply]`: read the merge-group verdict for the
 /// rollup branch. Green + SHA on main closes each constituent with the SHA; red prints the
 /// two halves to rebuild and test; pending touches nothing. Without `--apply`, dry run.
 fn verify(a: &[String]) -> Result<(), String> {
-    let [branch, sha, list, rest @ ..] = a else {
+    let [branch, head, sha, list, rest @ ..] = a else {
         return Err("usage: aprender-rollup verify <branch> <sha|-> <n,n,..> [--apply]".into());
     };
     let picked: Vec<u64> = list
@@ -103,15 +103,19 @@ fn verify(a: &[String]) -> Result<(), String> {
         })
         .collect::<Result<_, _>>()?;
     let runs = gh(&mg::run_list_args(branch))?;
-    let v = mg::parse_verdict(&runs)?;
+    let v = mg::parse_verdict(&runs, head)?;
     println!("verdict {v:?}");
-    let sha = (sha != "-").then_some(sha.as_str());
+    let on_main = |s: &str| git_ok(&mg::ancestor_args(s));
+    let sha = (sha != "-" && on_main(sha)).then_some(sha.as_str());
     match v {
         Verdict::Pending => {}
         Verdict::Red => match aprender_rollup::split(&picked) {
             Some((x, y)) => println!("bisect: rebuild halves {x:?} and {y:?}"),
             None => println!("culprit #{}", picked[0]),
         },
+        Verdict::Green if sha.is_none() => {
+            println!("green, waiting for the rollup commit on origin/main; nothing posted");
+        }
         Verdict::Green => {
             for n in &picked {
                 let args = close::gh_args(*n, &outcome(true, sha));
@@ -125,6 +129,14 @@ fn verify(a: &[String]) -> Result<(), String> {
     Ok(())
 }
 
+/// Run `git` in the current checkout; true on exit 0.
+fn git_ok(args: &[String]) -> bool {
+    Command::new("git")
+        .args(args)
+        .status()
+        .is_ok_and(|s| s.success())
+}
+
 fn main() -> ExitCode {
     let args: Vec<String> = std::env::args().collect();
     let cmd = args.get(1).map(String::as_str).unwrap_or("");
@@ -132,7 +144,7 @@ fn main() -> ExitCode {
         "plan" | "build" => run(cmd, args.get(2).map(String::as_str)),
         "verify" => verify(&args[2..]),
         _ => {
-            eprintln!("usage: aprender-rollup plan | build <dir> | verify <branch> <sha|-> <n,..> [--apply]");
+            eprintln!("usage: aprender-rollup plan | build <dir> | verify <branch> <head-sha> <sha|-> <n,..> [--apply]");
             return ExitCode::from(2);
         }
     };

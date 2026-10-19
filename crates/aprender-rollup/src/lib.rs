@@ -37,7 +37,12 @@ pub enum Reject {
     NoOptInLabel,
     TooLarge(u32),
     ForbiddenFile(String),
-    FileOverlap { with: u64, file: String },
+    FileOverlap {
+        with: u64,
+        file: String,
+    },
+    /// Eligible, but the rollup already holds [`MAX_ENTRIES`].
+    OverCap,
 }
 
 /// Files a rollup never carries: CI workflows, contracts, the lockfile.
@@ -99,6 +104,8 @@ pub fn select(cands: &[Candidate]) -> Selection {
         } else if taken.len() < MAX_ENTRIES {
             sel.picked.push(c.number);
             taken.push((c, c.number));
+        } else {
+            sel.rejected.push((c.number, Reject::OverCap));
         }
     }
     sel

@@ -35,3 +35,12 @@ fn lists_picked_then_each_skip_with_its_reason() {
          skip #8: touches Cargo.lock (CI, contract or lockfile)\n"
     );
 }
+
+#[test]
+fn over_cap_is_named_in_the_plan() {
+    let sel = Selection {
+        picked: vec![1],
+        rejected: vec![(9, Reject::OverCap)],
+    };
+    assert!(plan_text(&sel).contains("skip #9: rollup already holds"));
+}

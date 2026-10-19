@@ -75,11 +75,12 @@ fn select_orders_by_number_and_skips_overlap() {
 }
 
 #[test]
-fn select_caps_at_three_without_rejecting_the_rest() {
+fn select_caps_at_three_and_names_the_rest() {
     let cands: Vec<Candidate> = (1..=12).map(|n| cand(n, &[&format!("f{n}.rs")])).collect();
     let sel = select(&cands);
     assert_eq!(sel.picked, (1..=3).collect::<Vec<u64>>());
-    assert!(sel.rejected.is_empty());
+    assert_eq!(sel.rejected.len(), 9);
+    assert!(sel.rejected.iter().all(|(_, r)| *r == Reject::OverCap));
 }
 
 #[test]

@@ -10,6 +10,7 @@ fn reason(r: &Reject) -> String {
         Reject::TooLarge(n) => format!("{n} lines > {}", crate::MAX_LINES),
         Reject::ForbiddenFile(f) => format!("touches {f} (CI, contract or lockfile)"),
         Reject::FileOverlap { with, file } => format!("shares {file} with #{with}"),
+        Reject::OverCap => format!("rollup already holds {}", crate::MAX_ENTRIES),
     }
 }
 

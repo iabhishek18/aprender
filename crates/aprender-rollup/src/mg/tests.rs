@@ -2,7 +2,7 @@ use super::*;
 
 fn run(status: &str, conclusion: Option<&str>) -> String {
     let c = conclusion.map_or("null".to_string(), |c| format!("\"{c}\""));
-    format!("{{\"status\":\"{status}\",\"conclusion\":{c}}}")
+    format!("{{\"headSha\":\"H\",\"status\":\"{status}\",\"conclusion\":{c}}}")
 }
 
 #[test]
@@ -12,7 +12,7 @@ fn verdict_green_needs_every_run_success() {
         run("completed", Some("success")),
         run("completed", Some("success"))
     );
-    assert_eq!(parse_verdict(&j), Ok(Verdict::Green));
+    assert_eq!(parse_verdict(&j, "H"), Ok(Verdict::Green));
 }
 
 #[test]
@@ -22,7 +22,7 @@ fn verdict_red_if_any_run_failed_even_with_others_pending() {
         run("in_progress", None),
         run("completed", Some("failure"))
     );
-    assert_eq!(parse_verdict(&j), Ok(Verdict::Red));
+    assert_eq!(parse_verdict(&j, "H"), Ok(Verdict::Red));
 }
 
 #[test]
@@ -32,26 +32,26 @@ fn verdict_pending_when_unfinished_and_none_failed() {
         run("completed", Some("success")),
         run("queued", None)
     );
-    assert_eq!(parse_verdict(&j), Ok(Verdict::Pending));
+    assert_eq!(parse_verdict(&j, "H"), Ok(Verdict::Pending));
 }
 
 #[test]
 fn no_runs_is_pending_not_green() {
-    assert_eq!(parse_verdict("[]"), Ok(Verdict::Pending));
+    assert_eq!(parse_verdict("[]", "H"), Ok(Verdict::Pending));
 }
 
 #[test]
 fn cancelled_and_timed_out_are_red() {
     for k in ["cancelled", "timed_out", "startup_failure"] {
         let j = format!("[{}]", run("completed", Some(k)));
-        assert_eq!(parse_verdict(&j), Ok(Verdict::Red), "{k}");
+        assert_eq!(parse_verdict(&j, "H"), Ok(Verdict::Red), "{k}");
     }
 }
 
 #[test]
 fn malformed_read_is_not_measured() {
-    assert!(parse_verdict("not json").is_err());
-    assert!(parse_verdict("{}").is_err());
+    assert!(parse_verdict("not json", "H").is_err());
+    assert!(parse_verdict("{}", "H").is_err());
 }
 
 #[test]
@@ -142,4 +142,33 @@ fn run_list_args_filter_merge_group_on_the_branch() {
     let a = run_list_args("rollup/5-3");
     assert!(a.windows(2).any(|w| w == ["--event", "merge_group"]));
     assert!(a.windows(2).any(|w| w == ["--branch", "rollup/5-3"]));
+}
+
+#[test]
+fn runs_of_another_head_are_ignored() {
+    let stale_red = "{\"headSha\":\"OLD\",\"status\":\"completed\",\"conclusion\":\"failure\"}";
+    let stale_green = "{\"headSha\":\"OLD\",\"status\":\"completed\",\"conclusion\":\"success\"}";
+    assert_eq!(
+        parse_verdict(&format!("[{stale_red}]"), "H"),
+        Ok(Verdict::Pending)
+    );
+    assert_eq!(
+        parse_verdict(&format!("[{stale_green}]"), "H"),
+        Ok(Verdict::Pending)
+    );
+    let j = format!("[{stale_red},{}]", run("completed", Some("success")));
+    assert_eq!(parse_verdict(&j, "H"), Ok(Verdict::Green));
+}
+
+#[test]
+fn run_list_args_ask_for_head_sha() {
+    assert!(run_list_args("b").iter().any(|a| a.contains("headSha")));
+}
+
+#[test]
+fn ancestor_args_check_against_origin_main() {
+    assert_eq!(
+        ancestor_args("abc"),
+        ["merge-base", "--is-ancestor", "abc", "origin/main"]
+    );
 }
